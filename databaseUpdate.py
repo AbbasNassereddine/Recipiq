@@ -76,7 +76,27 @@ ORDER BY
     except Exception as e:
         return(e)
     #conn.close()
- 
+
+def getItems(user_id):
+    user_id=str(user_id)
+    query="""SELECT 
+    JSON_QUERY(data, '$.items') AS ItemsList
+FROM 
+    ShoppingTransactions
+where user_id=N'"""+user_id +"""' 
+    AND transaction_date <= DATEADD(DAY, -7, GETDATE());
+"""
+    #print(query)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(query)
+    #conn.commit()
+        rows = cursor.fetchall()
+        query_result = rows
+        return str(query_result)
+    except Exception as e:
+        return('Error: '+ query)
+    
  
     
 

@@ -1,6 +1,7 @@
 from openai import OpenAI
 from receiptProcess import *
 from databaseUpdate import *
+from responseProcessing import *
 from dotenv import load_dotenv
 import os
 from telegram import Update, Bot
@@ -58,15 +59,28 @@ def get_language(update: Update):
     # Detect user's language based on the user's profile or request
     return update.message.from_user.language_code if update.message else 'en'
 
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text('Upload photo')
-    return UPLOAD_RECEIPT
+async def start(update: Update, context: CallbackContext) -> None:
+    """Send a welcome message and introduce the bot's features."""
+    welcome_message = (
+        "Welcome to the BuyBetter Bot! Here's what I can do:\n\n"
+        "- 📊 Provide spending insights\n"
+        "- 🔔 Notify you about offers and price comparisons\n"
+        "- 🥗 Suggest healthier alternatives\n"
+        "- 🍳 Recommend recipes based on your receipts\n\n"
+        "Send /help to see how you can use this bot! "
+    )
+    await update.message.reply_text(welcome_message)
 
-async def upload_receipt(update: Update, context: CallbackContext):
-    # Check if the user uploaded a photo
-   user_id = update.message.from_user.id
-   if update.message.photo:
-    photo_id = update.message.photo[-1].file_id  # Largest resolution
+
+async def upload(update: Update, context: CallbackContext) -> None:
+    """Prompt the user to upload a receipt."""
+    await update.message.reply_text("Please upload an image of your receipt.")
+    
+
+async def process_receipt(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    if update.message.photo:
+        photo_id = update.message.photo[-1].file_id  # Largest resolution
     context.user_data['photo_id'] = photo_id
 
     bot = Bot(token=TOKEN)
@@ -88,12 +102,12 @@ async def upload_receipt(update: Update, context: CallbackContext):
         await update.message.reply_text(f"Error uploading file to Blob Storage: {str(e)}")
     try:
         transactionUpload(analyze_layout(DOCUMENT_AI_ENDPOINT, DOCUMENT_AI_KEY,blob_url),str(user_id))
-        await update.message.reply_text("Upload Successful. Your transaction history has been updated. What would you like to do next?")
+        await update.message.reply_text("Upload Successful. Your transaction history has been updated. What would you like to do next?\n - Send /help to view further functionalities!")
         
     except Exception as e:
         if 'Violation of PRIMARY KEY' in str(e):
-            await update.message.reply_text(f"Receipt has already been uploaded for today.")
-            await update.message.reply_text(f"Your transaction history is: "+ str(monthlyAnalysis(str(user_id))))
+            await update.message.reply_text(f"Receipt has already been uploaded for today. \n - Send /help to view further functionalities!")
+            
             
         else:
             await update.message.reply_text(f"Analysis error: {str(e)}")
@@ -102,24 +116,69 @@ async def upload_receipt(update: Update, context: CallbackContext):
 
             # Call your function to process the receipt
 
-   else:
-    await update.message.reply_text('Invalid Photo. Please upload a valid receipt.') # Retry photo upload
+    except:
+        await update.message.reply_text('Invalid Photo. Please upload a valid receipt.') # Retry photo upload
+
+async def insights(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    """Provide spending insights to the user."""
+    await update.message.reply_text(f"Your transaction history is: " )
+    insights_message = ("- 🛒 Total spent:\n"+ str(monthlyAnalysis(str(user_id))))
+
+    #     "Here are your spending insights:\n\n"
+    #     "- 🛒 Total spent: $100\n"
+    #     "- 🍎 Groceries: $40\n"
+    #     "- 🥤 Snacks: $20\n"
+    #     "- 🥗 Health score: 75%\n\n"
+    #     "Keep it up!"
+    # )
+    await update.message.reply_text(insights_message)
 
 
+async def help_command(update: Update, context: CallbackContext) -> None:
+    """Display help message."""
+    help_message = (
+            "Here's how to use this bot:\n\n"
+            "- /start: Start the bot and see features\n"
+            "- /upload: Upload a receipt to scan\n"
+            "- /insights: View spending insights\n"
+            "- /recipes: Get recipe suggestions\n"
+            "- /help: Show this help message\n\n"
+            "Send /upload to start !"
+        )
+    await update.message.reply_text(help_message)
+async def recipes(update: Update, context: CallbackContext) -> None:
+    try:
+        user_id = update.message.from_user.id
+        
+        # Placeholder for recipe suggestions
+        recipe_message = (
+            "Based on your recent purchases, here are some recipes you can try:\n\n"+
+            recipe_suggestion (getItems(user_id),openai_api_key)
+        )
+        await update.message.reply_text(recipe_message)
+    except Exception as e:
+        await update.message.reply_text(str(e))
 # Create the conversation handler
-conv_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', start)],  # Standard entry point
-    states={
-        UPLOAD_RECEIPT: [MessageHandler(filters.PHOTO, upload_receipt)]  # Handle photo upload here
-    },
-    fallbacks=[CommandHandler('start', start)]  # Fallback if user issues any invalid command
-)  
+# conv_handler = ConversationHandler(
+#     entry_points=[CommandHandler('start', start)],  # Standard entry point
+#     states={
+#         UPLOAD_RECEIPT: [MessageHandler(filters.PHOTO, upload_receipt)]  # Handle photo upload here
+#     },
+#     fallbacks=[CommandHandler('start', start)]  # Fallback if user issues any invalid command
+# )  
 async def run_bot():
     """Run the bot."""
     application = Application.builder().token(TOKEN).build()
 
     # Add handlers
-    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("upload", upload))
+    application.add_handler(CommandHandler("insights", insights))
+    application.add_handler(CommandHandler("recipes", recipes))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(MessageHandler(filters.PHOTO, process_receipt))
+
     #application.add_handler(CallbackQueryHandler(item_selection, pattern="^select_"))
 
 
