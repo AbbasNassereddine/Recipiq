@@ -32,12 +32,9 @@ def transactionUpload (transaction,user_id):
     #cursor.execute(query)
     #conn.commit()
     query = f"INSERT INTO ShoppingTransactions (user_id, transaction_date,merchant_name,transaction_total,data) VALUES ( N'{user_id}',N'{transaction_date}',N'{merchant_name}',N'{transaction_total}',N'{data}' );"
-    try:
-        cursor = conn.cursor()
-        cursor.execute(query)
-        conn.commit()
-    except Exception as e:
-        return('Error: '+ query)
+    cursor = conn.cursor()
+    cursor.execute(query)
+    conn.commit()
 
     #conn.close()
 

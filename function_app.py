@@ -105,12 +105,14 @@ async def process_receipt(update: Update, context: CallbackContext):
         await update.message.reply_text("Upload Successful. Your transaction history has been updated. What would you like to do next?\n - Send /help to view further functionalities!")
         
     except Exception as e:
-        if 'Violation of PRIMARY KEY' in str(e):
-            await update.message.reply_text(f"Receipt has already been uploaded for today. \n - Send /help to view further functionalities!")
-            
-            
+        if 'PRIMARY KEY' in str(e):
+            await update.message.reply_text(f"Receipt has already been uploaded for today. \n - Send /help to view further functionalities!")  
+        elif 'KeyError' in str(e):
+            await update.message.reply_text(f"Some information appear to have not been scanned properly from your receipt. Please try uploading again.")  
+            transactionUpload(analyze_layout(DOCUMENT_AI_ENDPOINT, DOCUMENT_AI_KEY,blob_url),str(user_id))
         else:
             await update.message.reply_text(f"Analysis error: {str(e)}")
+            
         # Get the blob URL
     
 
