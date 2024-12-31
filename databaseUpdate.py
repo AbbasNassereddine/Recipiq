@@ -31,14 +31,14 @@ def transactionUpload (transaction,user_id):
     #cursor = conn.cursor()
     #cursor.execute(query)
     #conn.commit()
+    query = f"INSERT INTO ShoppingTransactions (user_id, transaction_date,merchant_name,transaction_total,data) VALUES ( N'{user_id}',N'{transaction_date}',N'{merchant_name}',N'{transaction_total}',N'{data}' );"
     try:
-        query = f"INSERT INTO ShoppingTransactions (user_id, transaction_date,merchant_name,transaction_total,data) VALUES ( N'{user_id}',N'{transaction_date}',N'{merchant_name}',N'{transaction_total}',N'{data}' );"
+        cursor = conn.cursor()
+        cursor.execute(query)
+        conn.commit()
     except Exception as e:
-        print(e)
-    #print(query)
-    cursor = conn.cursor()
-    cursor.execute(query)
-    conn.commit()
+        return('Error: '+ query)
+
     #conn.close()
 
 
@@ -84,7 +84,7 @@ def getItems(user_id):
 FROM 
     ShoppingTransactions
 where user_id=N'"""+user_id +"""' 
-    AND transaction_date <= DATEADD(DAY, -7, GETDATE());
+    AND transaction_date >= DATEADD(DAY, -10, GETDATE());
 """
     #print(query)
     try:

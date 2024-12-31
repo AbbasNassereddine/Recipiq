@@ -144,6 +144,7 @@ async def help_command(update: Update, context: CallbackContext) -> None:
             "- /insights: View spending insights\n"
             "- /recipes: Get recipe suggestions\n"
             "- /help: Show this help message\n\n"
+            "- /shoppinglist: Create your shopping list!\n\n"
             "Send /upload to start !"
         )
     await update.message.reply_text(help_message)
