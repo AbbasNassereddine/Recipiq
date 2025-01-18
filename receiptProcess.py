@@ -88,9 +88,12 @@ def analyze_layout(endpoint,key,formUrl):
         df=pd.DataFrame(zip(extracted_metadata,extracted_items,categories,extracted_unit_prices,extracted_prices),columns=['metadata','items','categories','unit_price','total_price'])
         #df['unit_price'] = df['metadata'].apply(lambda x: re.search(r"(\d+)\s*x\s*(\d,\d{2})\s*(\d,\d{2})", x).group(2) if re.search(r"(\d+)\s*x\s*(\d,\d{2})\s*(\d,\d{2})", x) else None).fillna(df['total_price'])
         df.loc[df['unit_price'] == 0, 'unit_price'] = df['total_price']
-        df['reduction_percentage'] = df['metadata'].apply(lambda x: re.search(r"(-?\d+)%", x).group(1) if re.search(r"(-?\d+)%", x) else None)
-        df['reduction_percentage'] = df['reduction_percentage'].fillna(0)
-        df['reduction_percentage']=abs(df['reduction_percentage'].astype(int))/100
+        try:
+            df['reduction_percentage'] = df['metadata'].apply(lambda x: re.search(r"(-?\d+)%", x).group(1) if re.search(r"(-?\d+)%", x) else None)
+            df['reduction_percentage'] = df['reduction_percentage'].fillna(0)
+            df['reduction_percentage']=abs(df['reduction_percentage'].astype(int))/100
+        except:
+            df['reduction_percentage']=0
         output={}
         output['transaction_date']=transaction_date
         output['merchant_name']=merchant_name

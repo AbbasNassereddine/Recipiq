@@ -78,41 +78,46 @@ async def upload(update: Update, context: CallbackContext) -> None:
     
 
 async def process_receipt(update: Update, context: CallbackContext):
-    user_id = update.message.from_user.id
-    if update.message.photo:
-        photo_id = update.message.photo[-1].file_id  # Largest resolution
-    context.user_data['photo_id'] = photo_id
-
-    bot = Bot(token=TOKEN)
     try:
-        file = await bot.get_file(photo_id)
-        file_stream = BytesIO()
-        await file.download_to_memory(file_stream)
-        file_stream.seek(0)  # Reset the stream position
+        user_id = update.message.from_user.id
+        if update.message.photo:
+            photo_id = update.message.photo[-1].file_id  # Largest resolution
+        context.user_data['photo_id'] = photo_id
 
-            # Upload the stream directly to Azure Blob Storage
-        blob_client = blob_service_client.get_blob_client(
-                container=AZURE_BLOB_CONTAINER_NAME, blob=f"receipts/{photo_id}.jpg"
-            )
+        bot = Bot(token=TOKEN)
+        try:
+            file = await bot.get_file(photo_id)
+            file_stream = BytesIO()
+            await file.download_to_memory(file_stream)
+            file_stream.seek(0)  # Reset the stream position
 
-        blob_client.upload_blob(file_stream, overwrite=True)
-        blob_url = blob_client.url
-        
-    except Exception as e:
-        await update.message.reply_text(f"Error uploading file to Blob Storage: {str(e)}")
-    try:
-        transactionUpload(analyze_layout(DOCUMENT_AI_ENDPOINT, DOCUMENT_AI_KEY,blob_url),str(user_id))
-        await update.message.reply_text("Upload Successful. Your transaction history has been updated. What would you like to do next?\n - Send /help to view further functionalities!")
-        
-    except Exception as e:
-        if 'PRIMARY KEY' in str(e):
-            await update.message.reply_text(f"Receipt has already been uploaded for today. \n - Send /help to view further functionalities!")  
-        elif 'KeyError' in str(e):
-            await update.message.reply_text(f"Some information appear to have not been scanned properly from your receipt. Please try uploading again.")  
-            transactionUpload(analyze_layout(DOCUMENT_AI_ENDPOINT, DOCUMENT_AI_KEY,blob_url),str(user_id))
-        else:
-            await update.message.reply_text(f"Analysis error: {str(e)}")
+                # Upload the stream directly to Azure Blob Storage
+            blob_client = blob_service_client.get_blob_client(
+                    container=AZURE_BLOB_CONTAINER_NAME, blob=f"receipts/{photo_id}.jpg"
+                )
+
+            blob_client.upload_blob(file_stream, overwrite=True)
+            blob_url = blob_client.url
             
+        except Exception as e:
+            await update.message.reply_text(f"Error uploading file to Blob Storage: {str(e)}")
+        try:
+            transactionUpload(analyze_layout(DOCUMENT_AI_ENDPOINT, DOCUMENT_AI_KEY,blob_url),str(user_id))
+            await update.message.reply_text("Upload Successful. Your transaction history has been updated. What would you like to do next?\n - Send /help to view further functionalities!")
+            
+        except Exception as e:
+            if 'PRIMARY KEY' in str(e):
+                await update.message.reply_text(f"Receipt has already been uploaded for today. \n - Send /help to view further functionalities!")  
+            elif 'KeyError' in str(e):
+                await update.message.reply_text(e)
+                await update.message.reply_text(f"Some information appear to have not been scanned properly from your receipt. Please try uploading again.")  
+                transactionUpload(analyze_layout(DOCUMENT_AI_ENDPOINT, DOCUMENT_AI_KEY,blob_url),str(user_id))
+            else:
+                await update.message.reply_text(f"Analysis error: {str(e)}")
+    
+    except Exception as e:
+        await update.message.reply_text(f"error: {str(e)}")
+                 
         # Get the blob URL
     
 
@@ -124,16 +129,15 @@ async def process_receipt(update: Update, context: CallbackContext):
 async def insights(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     """Provide spending insights to the user."""
-    await update.message.reply_text(f"Your transaction history is: " )
-    insights_message = ("- 🛒 Total spent:\n"+ str(monthlyAnalysis(str(user_id))))
-
-    #     "Here are your spending insights:\n\n"
-    #     "- 🛒 Total spent: $100\n"
-    #     "- 🍎 Groceries: $40\n"
-    #     "- 🥤 Snacks: $20\n"
-    #     "- 🥗 Health score: 75%\n\n"
-    #     "Keep it up!"
-    # )
+    #await update.message.reply_text(f"Your transaction history is: " )
+    insights_message = ("Here are your spending insights:\n\n"+
+                        "- 🛒 Total spent:\n"+ str(monthlyAnalysis(str(user_id)))+"\n"
+                        #+"\n - Categories spent:\n"+categorySpending (str(user_id))
+        "- 🍎 Groceries: $40\n"
+        "- 🥤 Snacks: $20\n"
+        "- 🥗 Health score: 75%\n\n"
+        "Keep it up!"
+    )
     await update.message.reply_text(insights_message)
 
 
