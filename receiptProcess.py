@@ -23,7 +23,7 @@ def get_chatgpt_response(prompt,openai_api_key):
         api_key=openai_api_key
     )
     response = client.chat.completions.create(
-        model="gpt-4",  # or "gpt-4" if available
+        model="gpt-3.5-turbo",  # or "gpt-4" if available
         messages=[{"role": "user", "content": prompt}]
     )
     return response
@@ -50,6 +50,13 @@ def get_category(items_list,openai_api_key):
     prompt='Please categorize the following list of items into these categories of food products:' +str(food_categories)+'. Provide the outcome in the form of a Python-readable list of categories, with each item categorized accordingly, no extra text or explanation. The list should look like a valid Python list, like this: ["Dairy", "Meat", "Vegetables", "Snacks and Confectionery"].Here are the items to categorize: ' + str(items_list)
     response = get_chatgpt_response(prompt,openai_api_key)
     return(response.choices[0].message.content)
+
+def get_standardized_product(items_list,openai_api_key):
+    prompt='Please standardize this item list into standard product names.Do not provide product specifities. Provide the outcome in the form of a Python-readable list of categories, with each item categorized accordingly, no extra text or explanation. The list should look like a valid Python list, like this: ["Milk", "Cheddar Cheese", "Tomatoe"].' +'Here are the items to standardize: ' + str(items_list)
+    response = get_chatgpt_response(prompt,openai_api_key)
+    return(response.choices[0].message.content)
+
+
 
 def analyze_layout(endpoint,key,formUrl):
     # sample document
@@ -82,10 +89,14 @@ def analyze_layout(endpoint,key,formUrl):
         extracted_unit_prices=[d['valueObject']['Price']['valueCurrency']['amount'] for d in data if 'valueObject' in d and 'Price' in d['valueObject'] and 'valueCurrency' in d['valueObject']['Price'] and 'amount' in d['valueObject']['Price']['valueCurrency']]
         extracted_metadata=[d['content'] for d in data if 'content' in d]
         try:
+            standardized_items=eval(get_standardized_product(extracted_items,openai_api_key))
+        except Exception as e:
+            standardized_items=['' for _ in range(len(extracted_items))]
+        try:
             categories=eval(get_category(extracted_items,openai_api_key))
         except Exception as e:
             categories=['' for _ in range(len(extracted_items))]
-        df=pd.DataFrame(zip(extracted_metadata,extracted_items,categories,extracted_unit_prices,extracted_prices),columns=['metadata','items','categories','unit_price','total_price'])
+        df=pd.DataFrame(zip(extracted_metadata,extracted_items,standardized_items,categories,extracted_unit_prices,extracted_prices),columns=['metadata','items','standardized_items','categories','unit_price','total_price'])
         #df['unit_price'] = df['metadata'].apply(lambda x: re.search(r"(\d+)\s*x\s*(\d,\d{2})\s*(\d,\d{2})", x).group(2) if re.search(r"(\d+)\s*x\s*(\d,\d{2})\s*(\d,\d{2})", x) else None).fillna(df['total_price'])
         df.loc[df['unit_price'] == 0, 'unit_price'] = df['total_price']
         try:
@@ -94,6 +105,7 @@ def analyze_layout(endpoint,key,formUrl):
             df['reduction_percentage']=abs(df['reduction_percentage'].astype(int))/100
         except:
             df['reduction_percentage']=0
+            pass
         output={}
         output['transaction_date']=transaction_date
         output['merchant_name']=merchant_name

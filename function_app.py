@@ -132,11 +132,11 @@ async def insights(update: Update, context: CallbackContext) -> None:
     #await update.message.reply_text(f"Your transaction history is: " )
     insights_message = ("Here are your spending insights:\n\n"+
                         "- 🛒 Total spent:\n"+ str(monthlyAnalysis(str(user_id)))+"\n"
-                        #+"\n - Categories spent:\n"+categorySpending (str(user_id))
-        "- 🍎 Groceries: $40\n"
-        "- 🥤 Snacks: $20\n"
-        "- 🥗 Health score: 75%\n\n"
-        "Keep it up!"
+                        +"- Categories spent:\n"+categorySpending (str(user_id))
+        # "- 🍎 Groceries: $40\n"
+        # "- 🥤 Snacks: $20\n"
+        # "- 🥗 Health score: 75%\n\n"
+        + "Keep it up!"
     )
     await update.message.reply_text(insights_message)
 
@@ -151,6 +151,7 @@ async def help_command(update: Update, context: CallbackContext) -> None:
             "- /recipes: Get recipe suggestions\n"
             "- /help: Show this help message\n\n"
             "- /shoppinglist: Create your shopping list!\n\n"
+            "- /lowestprices: Find the lowest prices for your shopping list! Make sure you first define a shopping list using /shoppinglist command!.\n\n"
             "Send /upload to start !"
         )
     await update.message.reply_text(help_message)
@@ -173,7 +174,45 @@ async def recipes(update: Update, context: CallbackContext) -> None:
 #         UPLOAD_RECEIPT: [MessageHandler(filters.PHOTO, upload_receipt)]  # Handle photo upload here
 #     },
 #     fallbacks=[CommandHandler('start', start)]  # Fallback if user issues any invalid command
-# )  
+# ) 
+
+async def shopping_list(update: Update, context: CallbackContext):
+    # Ask the user to send their shopping list
+    await update.message.reply_text(
+        "Please send your shopping list with each item on a new line. Example:\n"
+        "Milk\nAvocado\nBread"
+    )
+
+# Step 2: Handle the user input for the shopping list
+async def handle_shopping_list_input(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    shopping_list_text = update.message.text
+
+    # Parse the shopping list (split by new lines)
+    shopping_list = [item.strip() for item in shopping_list_text.split("\n")]
+
+    # Store the shopping list in context.user_data
+    context.user_data['shopping_list'] = shopping_list
+
+    # Send a confirmation message with the shopping list and thank the user
+    await update.message.reply_text(
+        "Here's your shopping list:\n- " + "\n- ".join(shopping_list) + "\n\nThank you for submitting your list! It has been saved."
+    )
+
+
+async def getLowestPrice(update: Update, context: CallbackContext):
+    shopping_list=context.user_data['shopping_list']
+    try:
+        if shopping_list== None:
+            await update.message.reply_text('Please define a shopping list by sending /shoppinglist and then check the prices available.')
+        else:
+            prices=getPrices(shopping_list)
+            await update.message.reply_text( str(prices))
+    except Exception as e:
+         await update.message.reply_text(str(e))
+
+
+
 async def run_bot():
     """Run the bot."""
     application = Application.builder().token(TOKEN).build()
@@ -185,7 +224,11 @@ async def run_bot():
     application.add_handler(CommandHandler("recipes", recipes))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.PHOTO, process_receipt))
+    application.add_handler(CommandHandler("shoppinglist", shopping_list))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_shopping_list_input))
 
+    #application.add_handler(CallbackQueryHandler(button_click))
+    application.add_handler(CommandHandler("lowestprices", getLowestPrice))
     #application.add_handler(CallbackQueryHandler(item_selection, pattern="^select_"))
 
 
