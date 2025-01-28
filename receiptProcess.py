@@ -9,8 +9,8 @@ from datetime import date
 from dotenv import load_dotenv
 from openai import OpenAI
 import logging
-
-
+import http.client
+import json
 
 
 load_dotenv(dotenv_path=r'keys.env')
@@ -56,6 +56,32 @@ def get_standardized_product(items_list,openai_api_key):
     response = get_chatgpt_response(prompt,openai_api_key)
     return(response.choices[0].message.content)
 
+def getCarbonFootprint(item):
+    try:
+        conn = http.client.HTTPSConnection("foodprint.p.rapidapi.com")
+
+        headers = {
+        'x-rapidapi-key': "b8d6ea7398msh29fc2b1b06c24a8p183759jsn9fe813f50473",
+        'x-rapidapi-host': "foodprint.p.rapidapi.com"
+        }
+        item1=item.replace(' ','%20')
+        conn.request("GET", "/api/foodprint/name/"+item1, headers=headers)
+
+        res = conn.getresponse()
+        data = res.read()
+        
+        try:
+            carbon_footprint=round(float(json.loads(data)[0]['footprint']),2)
+        except:
+            item=item.split(' ')[1]
+            conn.request("GET", "/api/foodprint/name/"+item, headers=headers)
+
+            res = conn.getresponse()
+            data = res.read()
+            carbon_footprint=round(float(json.loads(data)[0]['footprint']),2)
+        return carbon_footprint
+    except Exception as e:
+        return 0
 
 
 def analyze_layout(endpoint,key,formUrl):
@@ -96,7 +122,11 @@ def analyze_layout(endpoint,key,formUrl):
             categories=eval(get_category(extracted_items,openai_api_key))
         except Exception as e:
             categories=['' for _ in range(len(extracted_items))]
-        df=pd.DataFrame(zip(extracted_metadata,extracted_items,standardized_items,categories,extracted_unit_prices,extracted_prices),columns=['metadata','items','standardized_items','categories','unit_price','total_price'])
+        try:
+            foodprint= [getCarbonFootprint(item) for item in standardized_items]
+        except:
+            foodprint=[0]*len(standardized_items)
+        df=pd.DataFrame(zip(extracted_metadata,extracted_items,standardized_items,categories,extracted_unit_prices,extracted_prices,foodprint),columns=['metadata','items','standardized_items','categories','unit_price','total_price','foodprint'])
         #df['unit_price'] = df['metadata'].apply(lambda x: re.search(r"(\d+)\s*x\s*(\d,\d{2})\s*(\d,\d{2})", x).group(2) if re.search(r"(\d+)\s*x\s*(\d,\d{2})\s*(\d,\d{2})", x) else None).fillna(df['total_price'])
         df.loc[df['unit_price'] == 0, 'unit_price'] = df['total_price']
         try:

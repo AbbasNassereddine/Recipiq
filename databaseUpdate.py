@@ -102,7 +102,7 @@ def getItems(user_id):
 FROM 
     ShoppingTransactions
 where user_id=N'"""+user_id +"""' 
-    AND transaction_date >= DATEADD(DAY, -20, GETDATE());
+    AND transaction_date >= DATEADD(DAY, -2000, GETDATE());
 """
     #print(query)
     try:
@@ -137,8 +137,11 @@ WHERE
         rows = cursor.fetchall()
         try:
             standardized_items_series = pd.Series([json.loads(item[0]) for item in rows])
+
             unit_price_series = pd.Series([json.loads(item[1]) for item in rows])
+
             category_df = pd.DataFrame(standardized_items_series.tolist())
+
             price_df = pd.DataFrame(unit_price_series.tolist())
             df = pd.DataFrame({
                 'Item': [item[0] for item in rows],
@@ -180,14 +183,74 @@ WHERE
                 formatted_message += "---------------------------\n"
 
         except Exception as e:
-            query=' error in manipulation '+str(e)
+            if 'Item' in e:
+                query='No previous items previously recorded from your shopping list. Kindly try with different items, or better yet, someone might soon register one or more of the items in your list!'
+            else:
+                query=' error in manipulation '+str(e)
             #str([item[2] for item in rows]   + str([item[3] for item in rows]) + str(category_df.values.flatten()) + str(unit_price_series.tolist()))
         
         return formatted_message
     except Exception as e:
-        return('Error: '+ query + str(e))
+        return(query )
      
-    
+
+def getfoodPrint(user_id):
+    server = 'items2.database.windows.net'
+    database = 'items2'
+    connection_string='Driver={ODBC Driver 18 for SQL Server};Server=items2.database.windows.net;Database=items2;Uid=CloudSA22ccf518;Pwd=X_majnoon95?;TrustServerCertificate=yes;'
+    conn = pyodbc.connect(connection_string)
+    user_id=str(user_id)
+    query="""SELECT 
+    JSON_QUERY(data, '$.standardized_items') AS standardized_items ,JSON_QUERY(data, '$.foodprint') AS foodprint,transaction_date
+FROM 
+    ShoppingTransactions
+where user_id=N'"""+user_id +"""' 
+"""
+    try:
+        cursor = conn.cursor()
+        cursor.execute(query)
+    #conn.commit()
+        rows = cursor.fetchall()
+        try:
+            df = pd.DataFrame({
+                'Item': [item[0] for item in rows],
+                'FoodPrint': [str(item[1]) for item in rows] ,
+                 'transaction_date': [item[2] for item in rows] 
+ })
+            items_df = pd.json_normalize(df['Item'].apply(json.loads))
+            foodprint_df = pd.json_normalize(df['FoodPrint'].apply(json.loads))
+
+            # Expand the data using melt
+            expanded_items = items_df.melt(ignore_index=False).drop(columns='variable').rename(columns={'value': 'Item'})
+            expanded_foodprint = foodprint_df.melt(ignore_index=False).drop(columns='variable').rename(columns={'value': 'FoodPrint'})
+
+            # Combine expanded Items, Prices, and repeat Merchant
+            expanded_df = pd.concat([expanded_items, expanded_foodprint], axis=1)
+            expanded_df['transaction_date'] = df.loc[expanded_items.index, 'transaction_date'].values
+
+            #filtered_df = expanded_df[expanded_df['Item'].isin(shopping_list)]
+            #filtered_df = expanded_df[expanded_df['Item'].apply(fuzzy_filter)]
+            expanded_df=expanded_df.dropna()
+            grouped_df = expanded_df.groupby('transaction_date').agg({
+            'Item': list,
+            'FoodPrint': list,
+                }).reset_index()
+            formatted_message = "Here is your foodprint based on your previous purchases:\n\n"
+            for index, row in grouped_df.iterrows():
+                formatted_message += f"Visit Date: {row['transaction_date']}\n"
+                formatted_message += f"\n"
+                for foodprint, item in zip(row['FoodPrint'], row['Item']):
+                    formatted_message += f"Item: {item}\n"
+                    formatted_message += f"Foodprint: {foodprint} kg CO2 eq/kg\n".replace ('0.0','N/A')
+                    formatted_message += f"\n"
+                formatted_message += "---------------------------\n"
+        except Exception as e:
+            query=' error in manipulation '+str(e)        
+        return formatted_message
+    except Exception as e:
+        return('Error: '+ query + str(e))
+        
+
 
 def categorySpending (user_id):
     server = 'items2.database.windows.net'

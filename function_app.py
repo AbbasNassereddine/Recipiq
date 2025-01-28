@@ -131,8 +131,8 @@ async def insights(update: Update, context: CallbackContext) -> None:
     """Provide spending insights to the user."""
     #await update.message.reply_text(f"Your transaction history is: " )
     insights_message = ("Here are your spending insights:\n\n"+
-                        "- 🛒 Total spent:\n"+ str(monthlyAnalysis(str(user_id)))+"\n"
-                        +"- Categories spent:\n"+categorySpending (str(user_id))
+                        "- 🛒 Total spent:\n"+ str(monthlyAnalysis(str(user_id)))
+                        
         # "- 🍎 Groceries: $40\n"
         # "- 🥤 Snacks: $20\n"
         # "- 🥗 Health score: 75%\n\n"
@@ -140,20 +140,47 @@ async def insights(update: Update, context: CallbackContext) -> None:
     )
     await update.message.reply_text(insights_message)
 
+async def nutrition(update: Update, context: CallbackContext) -> None:
+    food_categories = {
+    "Dairy": "🥛 ",
+    "Meat": "🥩 ",
+    "Poultry": "🍗 ",
+    "Fish and Seafood": "🐟 ",
+    "Vegetables": "🥦 ",
+    "Fruits": "🍎 ",
+    "Grains and Cereals": "🌾 ",
+    "Legumes and Pulses": "🫘 ",
+    "Nuts and Seeds": "🥜 ",
+    "Oils and Fats": "🫒 ",
+    "Beverages": "🧃 ",
+    "Snacks and Confectionery": "🍫 ",
+    "Spices and Condiments": "🌶️ ",
+    "Packaged and Processed Foods": "📦 ",
+    "Bakery Products": "🍞 "
+}
+
+    user_id = update.message.from_user.id 
+    nutrition_message="Categories spent:\n\n"+categorySpending (str(user_id))
+    for key, value in food_categories.items():
+        nutrition_message = nutrition_message.replace(key, value +key)
+    await update.message.reply_text(nutrition_message)
+
 
 async def help_command(update: Update, context: CallbackContext) -> None:
     """Display help message."""
     help_message = (
-            "Here's how to use this bot:\n\n"
-            "- /start: Start the bot and see features\n"
-            "- /upload: Upload a receipt to scan\n"
-            "- /insights: View spending insights\n"
-            "- /recipes: Get recipe suggestions\n"
-            "- /help: Show this help message\n\n"
-            "- /shoppinglist: Create your shopping list!\n\n"
-            "- /lowestprices: Find the lowest prices for your shopping list! Make sure you first define a shopping list using /shoppinglist command!.\n\n"
-            "Send /upload to start !"
-        )
+    "Here's how to use this bot:\n\n"
+    "🎯 /start: Start the bot and see features\n"
+    "📄 /upload: Upload a receipt to scan\n"
+    "📊 /insights: View spending insights\n"
+    "🥗 /nutrition: View your nutrition stats\n"
+    "🌳 /foodprint: View your food carbon footprint\n"
+    "🍳 /recipes: Get recipe suggestions\n"
+    "❓ /help: Show this help message\n"
+    "🛒 /shoppinglist: Create your shopping list!\n"
+    "💰 /lowestprices: Find the lowest prices for your shopping list! Make sure you first define a shopping list using /shoppinglist command!\n\n"
+    "Send  /upload to start!"
+)
     await update.message.reply_text(help_message)
 async def recipes(update: Update, context: CallbackContext) -> None:
     try:
@@ -182,6 +209,16 @@ async def shopping_list(update: Update, context: CallbackContext):
         "Please send your shopping list with each item on a new line. Example:\n"
         "Milk\nAvocado\nBread"
     )
+
+async def foodprint(update: Update, context: CallbackContext):
+    try:
+        user_id = update.message.from_user.id
+        await update.message.reply_text(getfoodPrint(user_id))
+    except:
+         await update.message.reply_text(
+        "Foodprint not available please try again later."
+    )
+
 
 # Step 2: Handle the user input for the shopping list
 async def handle_shopping_list_input(update: Update, context: CallbackContext):
@@ -225,6 +262,8 @@ async def run_bot():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.PHOTO, process_receipt))
     application.add_handler(CommandHandler("shoppinglist", shopping_list))
+    application.add_handler(CommandHandler("foodprint", foodprint))
+    application.add_handler(CommandHandler("nutrition", nutrition))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_shopping_list_input))
 
     #application.add_handler(CallbackQueryHandler(button_click))
