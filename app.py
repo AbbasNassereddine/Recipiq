@@ -1,48 +1,44 @@
-from openai import OpenAI
-from receiptProcess import *
-from databaseUpdate import *
-from responseProcessing import *
+from fastapi import FastAPI, BackgroundTasks
+from telegram import Update, Bot
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from dotenv import load_dotenv
 import os
-from telegram import Update, Bot
+import asyncio
+import logging
+from io import BytesIO
+from azure.storage.blob import BlobServiceClient
+from receiptProcess import analyze_layout
+from databaseUpdate import transactionUpload, monthlyAnalysis, categorySpending, getItems, getfoodPrint, getPrices
+from responseProcessing import recipe_suggestion
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler
-import azure.functions as func
-import logging
-import json
-from io import BytesIO
-from azure.storage.blob import BlobServiceClient
-from azure.core.credentials import AzureKeyCredential
-# Initialize logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
 
 # Load environment variables
-load_dotenv(dotenv_path=r'keys.env')
-openai_api_key = os.getenv('OPENAI_API_KEY')
-
-TOKEN=os.getenv('TELEGRAM_BOT_TOKEN')
-AZURE_STORAGE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
-AZURE_STORAGE_ACCOUNT_KEY = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
-AZURE_BLOB_CONTAINER_NAME = os.getenv("AZURE_BLOB_CONTAINER_NAME")
+load_dotenv()
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 BLOB_CONNECTION_STRING = os.getenv("BLOB_CONNECTION_STRING")
-
-# Initialize Azure Blob Service Client
-blob_service_client = BlobServiceClient.from_connection_string(BLOB_CONNECTION_STRING)
-
-
+AZURE_BLOB_CONTAINER_NAME = os.getenv("AZURE_BLOB_CONTAINER_NAME")
 DOCUMENT_AI_ENDPOINT = os.getenv('DOCUMENT_AI_ENDPOINT')
 DOCUMENT_AI_KEY = os.getenv('DOCUMENT_AI_KEY')
-#formUrl = os.getenv('formUrl')
-
-# Initialize conversation states
-CHOOSING_LANGUAGE,UPLOAD_RECEIPT= range(2)
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 
+load_dotenv(dotenv_path=r'keys.env')
+openai_api_key = os.getenv('OPENAI_API_KEY')
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI()
+blob_service_client = BlobServiceClient.from_connection_string(BLOB_CONNECTION_STRING)
+
+# Initialize Telegram bot
+telegram_bot = Bot(token=TOKEN)
+application = Application.builder().token(TOKEN).build()
+
+# Telegram bot commands
 async def set_language(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
@@ -248,50 +244,48 @@ async def getLowestPrice(update: Update, context: CallbackContext):
     except Exception as e:
          await update.message.reply_text(str(e))
 
-
-
-async def run_bot():
-    """Run the bot."""
-    application = Application.builder().token(TOKEN).build()
-
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("upload", upload))
-    application.add_handler(CommandHandler("insights", insights))
-    application.add_handler(CommandHandler("recipes", recipes))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.PHOTO, process_receipt))
-    application.add_handler(CommandHandler("shoppinglist", shopping_list))
-    application.add_handler(CommandHandler("foodprint", foodprint))
-    application.add_handler(CommandHandler("nutrition", nutrition))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_shopping_list_input))
-
+# Register bot handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("upload", upload))
+application.add_handler(CommandHandler("insights", insights))
+application.add_handler(CommandHandler("recipes", recipes))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(MessageHandler(filters.PHOTO, process_receipt))
+application.add_handler(CommandHandler("shoppinglist", shopping_list))
+application.add_handler(CommandHandler("foodprint", foodprint))
+application.add_handler(CommandHandler("nutrition", nutrition))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_shopping_list_input))
     #application.add_handler(CallbackQueryHandler(button_click))
-    application.add_handler(CommandHandler("lowestprices", getLowestPrice))
+application.add_handler(CommandHandler("lowestprices", getLowestPrice))
     #application.add_handler(CallbackQueryHandler(item_selection, pattern="^select_"))
 
-
-    # Start the bot
+# Run Telegram bot in the background
+async def run_bot():
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()
-    #await application.idle()
+    #await application.updater.start_polling()
 
+@app.get("/")
+async def root(background_tasks: BackgroundTasks):
+    # Use background task directly to start the bot, without manually calling asyncio.create_task
+    background_tasks.add_task(run_bot)
+    return {"message": "Telegram bot is running!"}
 
-# Azure Functions handler
-app = func.FunctionApp()
-@app.route(route="http_trigger_better_buy")
-async def main(req) -> str:
-    """Entry point for Azure Functions."""
-    import asyncio
+from fastapi import Request
 
-    # Run the bot asynchronously
-    asyncio.create_task(run_bot())
-    return "Bot is running"
-
+@app.post("/webhook")
+async def webhook(request: Request):
+    """Process incoming Telegram updates."""
+    try:
+        await telegram_bot.initialize()
+        data = await request.json()
+        update = Update.de_json(data, telegram_bot)
+        await application.update_queue.put(update)  # Forward update to bot
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
-    import asyncio
-
-    # Local testing
-    asyncio.run(run_bot())
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
