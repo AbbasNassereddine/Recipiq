@@ -263,7 +263,7 @@ application.add_handler(CommandHandler("lowestprices", getLowestPrice))
 async def run_bot():
     await application.initialize()
     await application.start()
-    #await application.updater.start_polling()
+    await application.updater.start_polling()
 
 @app.get("/")
 async def root(background_tasks: BackgroundTasks):
